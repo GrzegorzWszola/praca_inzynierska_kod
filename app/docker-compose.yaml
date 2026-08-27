@@ -1,0 +1,4 @@
+services:
+  book-parser-test:
+    build:
+      context: ./book-parser

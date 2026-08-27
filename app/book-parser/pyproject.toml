@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "book-parser"
+version = "0.1.0"
+description = "Tool for parsing books in .epub format"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "EbookLib>=0.18",
+    "lxml>=4.9.0",
+    "beautifulsoup4>=4.15.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]

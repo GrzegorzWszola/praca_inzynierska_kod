@@ -1,2 +1,11 @@
 pandas
 python-dotenv
+numpy
+matplotlib
+scikit-learn
+xgboost
+sentence-transformers
+EbookLib
+beautifulsoup4
+
+-e ./app/book-parser
