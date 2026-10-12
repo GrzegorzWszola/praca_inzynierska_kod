@@ -2,3 +2,7 @@ services:
   book-parser-test:
     build:
       context: ./book-parser
+
+  ml-engine-test:
+    build:
+      context: ./ml-engine

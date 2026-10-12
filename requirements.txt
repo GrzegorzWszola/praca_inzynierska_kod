@@ -7,5 +7,10 @@ xgboost
 sentence-transformers
 EbookLib
 beautifulsoup4
+accelerate
+datasets
+sentencepiece
+protobuf
 
 -e ./app/book-parser
+-e ./app/ml-engine

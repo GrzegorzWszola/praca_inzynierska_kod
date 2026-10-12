@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-engine"
+version = "0.1.0"
+description = "Set of tools for training and using ml models"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=2.5.2",
+    "pandas>=3.0.5",
+    "scikit-learn>=1.9.0",
+    "xgboost>=3.4.1",
+    "sentence-transformers>=6.0.1",
+    "accelerate",
+    "datasets",
+    "torch",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
