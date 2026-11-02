@@ -3,3 +3,5 @@ env/
 *.csv
 **/saved_models/
 __pycache__/
+book_parser/
+app/NLP/models/

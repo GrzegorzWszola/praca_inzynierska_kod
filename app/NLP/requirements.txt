@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+pydantic-settings
+alembic
+python-multipart
+transformers
+sentencepiece
+protobuf
+tiktoken

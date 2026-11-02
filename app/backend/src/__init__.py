@@ -6,5 +6,5 @@ logger.setLevel(logging.INFO)
 
 # Attach handler & format once
 handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [BookParser]: %(message)s"))
+handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [Backend]: %(message)s"))
 logger.addHandler(handler)

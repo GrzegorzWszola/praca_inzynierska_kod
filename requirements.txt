@@ -12,5 +12,4 @@ datasets
 sentencepiece
 protobuf
 
--e ./app/book-parser
 -e ./app/ml-engine

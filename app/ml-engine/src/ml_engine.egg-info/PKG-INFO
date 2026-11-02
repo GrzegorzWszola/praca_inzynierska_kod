@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: ml-engine
+Version: 0.1.0
+Summary: Set of tools for training and using ml models
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=2.5.2
+Requires-Dist: pandas>=3.0.5
+Requires-Dist: scikit-learn>=1.9.0
+Requires-Dist: xgboost>=3.4.1
+Requires-Dist: sentence-transformers>=6.0.1
+Requires-Dist: accelerate
+Requires-Dist: datasets
+Requires-Dist: torch
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Requires-Dist: pytest-cov>=4.0; extra == "test"

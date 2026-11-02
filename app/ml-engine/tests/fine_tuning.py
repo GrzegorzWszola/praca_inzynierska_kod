@@ -1,4 +1,7 @@
 import os
+
+import numpy as np
+import pandas as pd
 os.environ["ACCELERATE_MIXED_PRECISION"] = "no"
 
 from ml_engine.metrics import Metrics
@@ -9,7 +12,7 @@ from test_utils import read_cr4, save_raport_to_file, read_emo_bank
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, TrainingArguments, Trainer
 
-TRAIN=True
+TRAIN=False
 
 DATASET_CR4 = "/home/grzeg/inz/app/ml-engine/tests/data/cr4_narr_dataset.csv"
 DATASET_EMO_BANK = "/home/grzeg/inz/app/ml-engine/tests/data/main_dataset.csv"
@@ -17,7 +20,7 @@ model_name = "microsoft/deberta-v3-base"
 # model_name = "microsoft/deberta-v3-large"
 if not TRAIN:
     ready_model = AutoModelForSequenceClassification.from_pretrained(
-        "/home/grzeg/inz/app/ml-engine/tests/saved_models/deberta/deberta_cr4-seed69",
+        "/home/grzeg/inz/app/ml-engine/tests/saved_models/deberta/deberta-vad-seed42",
         dtype=torch.float32,
     )
 
@@ -108,6 +111,16 @@ if __name__ == "__main__":
 
     with profiler.measure("Prediction", "Deberta"):
         results = trainer.predict(test_dataset)
+
+    preds = results.predictions
+    labels = results.label_ids
+    out = pd.DataFrame({
+        "text": test["text"].values,
+        "V_true": labels[:, 0], "A_true": labels[:, 1], "D_true": labels[:, 2],
+        "V_pred": preds[:, 0],  "A_pred": preds[:, 1],  "D_pred": preds[:, 2],
+    })
+    out.to_csv("/home/grzeg/inz/app/ml-engine/tests/reports/predictions_test.csv", index=False)
+    np.save("/home/grzeg/inz/app/ml-engine/tests/reports/preds_test.npy", preds)
 
     metrics_tracker.compute_metrics("DeBERTa-v3-base", results.label_ids, results.predictions)
     metrics_report = metrics_tracker.report()

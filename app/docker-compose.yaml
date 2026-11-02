@@ -1,8 +1,38 @@
 services:
-  book-parser-test:
-    build:
-      context: ./book-parser
+  backend:
+    build: ./backend/
+    command: uvicorn backend.src.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/code/backend
+      - bookdata:/app/data
+    env_file: ./backend/.env
+    environment:
+      DATA_DIR: /app/data
+      NLP_URL: "http://nlp:8008"
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
 
-  ml-engine-test:
+  nlp:
+    build: ./NLP/
+    command: uvicorn src.app.main:app --host 0.0.0.0 --port 8008
+    env_file: ./NLP/.env
+    environment:
+      MODEL_PATH: /models/vad/deberta-vad-seed42
+      QUANTIZE_PATH: /models/vad/quantization.json
+    volumes:
+      - ./NLP/models/vad:/models/vad:ro
+
+  frontend:
     build:
-      context: ./ml-engine
+      context: ./frontend/
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+volumes:
+  bookdata:
