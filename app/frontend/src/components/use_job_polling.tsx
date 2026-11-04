@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { Book } from "../types/Book"
+import { api } from "../api"
 
-const API = import.meta.env.VITE_API_URL
 const isActive = (b: Book) => b.status === "sent" || b.status === "parsing" || b.status === "predicting"
 
 export default function useJobPolling(books: Book[], update: (jobId: string, patch: Partial<Book>) => void) {
@@ -22,7 +22,7 @@ export default function useJobPolling(books: Book[], update: (jobId: string, pat
             await Promise.all(
                 active.map(async (b) => {
                     try {
-                        const res = await fetch(`${API}/books/${b.jobId}/status`, {
+                        const res = await api(`/books/${b.jobId}/status`, {
                             signal: controller.signal,
                         })
                         if (res.status === 404) {

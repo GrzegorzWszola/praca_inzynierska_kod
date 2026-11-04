@@ -6,4 +6,5 @@ pydantic-settings
 alembic
 python-multipart
 httpx
+sqlmodel
 -e git+https://github.com/GrzegorzWszola/book_parser.git@main#egg=book-parser

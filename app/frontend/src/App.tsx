@@ -1,21 +1,51 @@
 import './App.css'
-import FileUpload from "./components/file_upload"
+import FileUpload, { formatFileName } from "./components/file_upload"
 import BookReader from "./components/book_reader"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import useJobPolling from './components/use_job_polling';
 import type { Book, BookContent } from './types/Book';
-
-const API = import.meta.env.VITE_API_URL;
+import { api } from './api';
 
 function App() {
   const [books, setBooks] = useState<Book[]>([])
   const [openBook, setOpenBook] = useState<{ jobId: string; content: BookContent } | null>(null)
 
+  useEffect(() => {
+    let cancelled = false
+
+    api("/books/mine")
+      .then((r) => {
+        if (!r.ok) throw new Error(`Error ${r.status}`)
+        return r.json()
+      })
+      .then((list: { job_id: string; name: string; status: string }[]) => {
+        if (cancelled) return
+        setBooks(
+          list.map((b) => ({
+            jobId: b.job_id,
+            filename: formatFileName(b.name),
+            status: b.status as Book["status"],
+            filepath: "",
+          }))
+        )
+      })
+      .catch(console.error)
+
+    return () => { cancelled = true }
+  }, [])
+
   const handleUploaded = ({ jobId, filename }: { jobId: string; filename: string }) =>
     setBooks((prev) => [{ jobId, filename, status: "sent", filepath: "" }, ...prev])
 
-  const removeBook = (jobId: string) =>
-    setBooks((prev) => prev.filter((b) => b.jobId !== jobId))
+  const removeBook = async (jobId: string) => {
+      try {
+        const res = await api(`/books/${jobId}`, { method: "DELETE" })
+        if (!res.ok && res.status !== 404) throw new Error(`Error ${res.status}`)
+        setBooks((prev) => prev.filter((b) => b.jobId !== jobId))
+      } catch (e) {
+        console.error(e)
+      }
+    }
 
   const updateBook = useCallback(
     (jobId: string, patch: Partial<Book>) =>
@@ -24,7 +54,7 @@ function App() {
   );
 
   const loadContent = async (jobId: string) => {
-    const res = await fetch(`${API}/books/${jobId}/content`)
+    const res = await api(`/books/${jobId}/content`)
     if (!res.ok) throw new Error(`Error ${res.status}`)
     const content: BookContent = await res.json()
     setOpenBook({ jobId, content })

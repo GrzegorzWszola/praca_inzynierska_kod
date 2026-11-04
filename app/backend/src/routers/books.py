@@ -1,3 +1,4 @@
+from datetime import timedelta
 import logging
 import os
 import shutil
@@ -8,6 +9,11 @@ from book_parser.parser import BookParser
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sqlmodel import select, update
+from backend.src.models.books_models import utcnow
+from backend.src.routers.session import CookieDep
+from backend.src.database import SessionDep, job_dir, set_status
+from backend.src.models import Book
 import httpx
 
 logger = logging.getLogger()
@@ -18,16 +24,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 MAX_BYTES = 50 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
-# Temporary solution
-JOBS: dict[str, dict] = {}
-
 router = APIRouter(prefix="/books", tags=["books"])
 
-def job_dir(job_id: str) -> Path:
-    return DATA_DIR / job_id
-
 @router.post("/upload_epub", status_code=202)
-async def upload_epub(file: UploadFile, tasks: BackgroundTasks):
+async def upload_epub(file: UploadFile, tasks: BackgroundTasks, session: SessionDep, sid: CookieDep):
     if not (file.filename or "").lower().endswith(".epub"):
         logger.warning("Upload rejected – not an .epub file: %s", file.filename)
         raise HTTPException(400, ".epub file required")
@@ -51,28 +51,41 @@ async def upload_epub(file: UploadFile, tasks: BackgroundTasks):
         raise
 
     logger.info("Job %s: epub uploaded (%.1f KB), queued for processing", job_id, size / 1024)
-    JOBS[job_id] = {"status": "queued"}
+    book = Book(
+        name=file.filename,
+        job_id=job_id,
+        browser_id=sid,
+        status="queued"
+    )
+    try:
+        session.add(book)
+        session.commit()
+    except Exception:
+        session.rollback()
+        shutil.rmtree(d, ignore_errors=True)
+        raise
+    session.refresh(book)
     tasks.add_task(process_job, job_id)
     return {"job_id": job_id}
 
 
 @router.get("/{job_id}/status")
-def job_status(job_id: str):
-    state = JOBS.get(job_id)
+def job_status(job_id: str, session: SessionDep, sid: CookieDep):
+    state = session.exec(select(Book.status).where(Book.job_id == job_id, Book.browser_id == sid)).first()
     if state is None:
         logger.warning("Status requested for unknown job: %s", job_id)
         raise HTTPException(404, "Unknown job")
-    return state
+    return {"status": state}
 
 @router.get("/{job_id}/content") 
-def get_content(job_id: str):
-    state = JOBS.get(job_id)
+def get_content(job_id: str, session: SessionDep, sid: CookieDep):
+    state = session.exec(select(Book.status).where(Book.job_id == job_id, Book.browser_id == sid)).first()
     if state is None:
         logger.warning("Content requested for unknown job: %s", job_id)
         raise HTTPException(404, "Unknown job")
 
-    if state.get("status") != "done":
-        logger.warning("Job %s: content requested but status is '%s'", job_id, state.get("status"))
+    if state != "done":
+        logger.warning("Job %s: content requested but status is '%s'", job_id, state)
         raise HTTPException(400, "Book is still processing")
 
     json_path = job_dir(job_id) / "book.json"
@@ -87,6 +100,28 @@ def get_content(job_id: str):
         filename=json_path.name
     )
 
+@router.get("/mine")
+def my_books(session: SessionDep, sid: CookieDep):
+    session.exec(
+        update(Book).where(Book.browser_id == sid).values(last_seen=utcnow())
+    )
+    session.commit()
+    books = session.exec(
+        select(Book).where(Book.browser_id == sid).order_by(Book.id.desc())
+    ).all()
+    return [{"job_id": b.job_id, "name": b.name, "status": b.status} for b in books]
+
+@router.delete("/{job_id}", status_code=204)
+def delete_book(job_id: str, session: SessionDep, sid: CookieDep):
+    book = session.exec(
+        select(Book).where(Book.job_id == job_id, Book.browser_id == sid)
+    ).first()
+    if book is None:
+        raise HTTPException(404, "Unknown job")
+    session.delete(book)
+    session.commit()
+    shutil.rmtree(job_dir(job_id), ignore_errors=True)
+
 def run_vad(job_id: str, input_path: Path, output_path: Path):
     with httpx.Client(timeout=600) as client:
         with input_path.open("rb") as f:
@@ -100,7 +135,8 @@ def run_vad(job_id: str, input_path: Path, output_path: Path):
 def process_job(job_id: str):
     d = job_dir(job_id)
     logger.info("Job %s: started processing", job_id)
-    JOBS[job_id] = {"status": "parsing"}
+
+    set_status(job_id, "parsing")
     try:
         BookParser().parse(d / "book.epub", d)
         parsed = next(p for p in d.glob("*.json") if p.name != "vad.json")
@@ -108,11 +144,12 @@ def process_job(job_id: str):
         logger.info("Job %s: parsing complete, starting VAD prediction", job_id)
 
         vad_out = d / "vad.json"
-        JOBS[job_id] = {"status": "predicting"}
+        set_status(job_id, "predicting")
         run_vad(job_id, parsed, vad_out)
 
         logger.info("Job %s: done", job_id)
-        JOBS[job_id] = {"status": "done", "book_id": job_id}
+        set_status(job_id, "done")
     except Exception:
         logger.exception("Job %s failed", job_id)
-        JOBS[job_id] = {"status": "error", "detail": "Processing failed"}
+        set_status(job_id, "failed")
+

@@ -11,5 +11,6 @@ accelerate
 datasets
 sentencepiece
 protobuf
+sqlmodel
 
 -e ./app/ml-engine

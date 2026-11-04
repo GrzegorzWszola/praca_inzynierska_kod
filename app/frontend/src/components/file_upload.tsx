@@ -1,27 +1,27 @@
 import { useState } from "react"
 import type { JobStatus } from "../types/Book";
+import { api } from "../api";
 
-const API = import.meta.env.VITE_API_URL;
 type Props = {
   onUploaded: (result: { jobId: string, filename: string, filepath: string, status: JobStatus }) => void;
+};
+
+export const formatFileName = (filename: string): string => {
+    if (!filename) return '';
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
+    const withSpaces = nameWithoutExt.replace(/[-_]/g, ' ');
+    const formatted = withSpaces
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+
+    return formatted;
 };
 
 export default function FileUpload({ onUploaded }: Props) {
     const [file, setFile] = useState<File | null>(null)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
-
-    const formatFileName = (filename: string): string => {
-        if (!filename) return '';
-        const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
-        const withSpaces = nameWithoutExt.replace(/[-_]/g, ' ');
-        const formatted = withSpaces
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
-
-        return formatted;
-    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFile(e.target.files?.[0] ?? null)
@@ -38,9 +38,10 @@ export default function FileUpload({ onUploaded }: Props) {
             setLoading(true)
             setError("")
             
-            const res = await fetch(`${API}/books/upload_epub`, {
+            const res = await api(`/books/upload_epub`, {
                 method: "POST",
                 body: formData,
+                
             })
             if (!res.ok) throw new Error(`Error: ${res.status}`)
             const data: { job_id: string } = await res.json();
