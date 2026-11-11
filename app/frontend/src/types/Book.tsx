@@ -13,3 +13,20 @@ export type BookContent = {
   metadata: { title: string; author: string; num_chapters: number; num_sentences: number }
   chapters: Chapter[]
 }
+
+export type Prediction = { label: string | null; certainty: number; margin?: number };
+
+export type Track = {
+  id: string;
+  file: string;
+  title?: string;
+};
+
+export type Manifest = Record<string, Track[]>;
+
+export type ManifestEntry = {
+  filename: string;
+  id: string;
+  category: string;
+  path?: string;
+};

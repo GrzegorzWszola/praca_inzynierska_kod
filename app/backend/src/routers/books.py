@@ -16,7 +16,6 @@ from backend.src.database import SessionDep, job_dir, set_status
 from backend.src.models import Book
 import httpx
 
-logger = logging.getLogger()
 load_dotenv()
 NLP_URL = os.environ.get("NLP_URL", "http://nlp:8008")
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data")).resolve()

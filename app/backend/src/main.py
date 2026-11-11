@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from backend.src.database import cleanup, create_db_and_tables
-from backend.src.routers import books, session
+from backend.src.routers import books, session, predictions
 from fastapi.middleware.cors import CORSMiddleware
 
 async def periodic_cleanup(day_number: int, interval_seconds: int = 3600):
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(periodic_cleanup(day_number=3, interval_seconds=3600))
     
     yield
-    
+
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -43,6 +43,7 @@ app.add_middleware(
 )
 app.include_router(books.router)
 app.include_router(session.router)
+app.include_router(predictions.router)
 
 @app.get("/health")
 def health():

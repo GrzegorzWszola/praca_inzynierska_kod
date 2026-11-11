@@ -12,12 +12,10 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 MODEL_PATH = Path(os.getenv("MODEL_PATH"))
-QUANTIZE_PATH = Path(os.getenv("QUANTIZE_PATH"))
 
 logger.info("Loading VAD model from %s", MODEL_PATH)
 model = VADPredictor()
 model.load_model(MODEL_PATH)
-model.load_quantization(QUANTIZE_PATH)
 logger.info("VAD model ready (device: %s)", model.device)
 
 router = APIRouter(prefix="/prediction", tags=["prediction"])

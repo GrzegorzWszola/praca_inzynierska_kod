@@ -89,7 +89,7 @@ export default function BookReader({ content, onClose, onVisibleSentences }: Pro
   useEffect(() => {
     if (!pages.length || !onVisibleSentences) return;
     // current page + 2 lookahead
-    const lookahead = pages.slice(pageIdx, pageIdx + 3).flat();
+    const lookahead = pages.slice(pageIdx, pageIdx + 2).flat();
     onVisibleSentences(sentenceIds(lookahead));
   }, [pages, pageIdx, onVisibleSentences]);
 

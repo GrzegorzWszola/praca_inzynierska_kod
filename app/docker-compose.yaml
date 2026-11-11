@@ -19,7 +19,6 @@ services:
     env_file: ./NLP/.env
     environment:
       MODEL_PATH: /models/vad/deberta-vad-seed42
-      QUANTIZE_PATH: /models/vad/quantization.json
     volumes:
       - ./NLP/models/vad:/models/vad:ro
 
@@ -28,11 +27,24 @@ services:
       context: ./frontend/
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_MUSIC_ORIGIN: ${VITE_MUSIC_ORIGIN:-http://localhost:8800}
+        VITE_MANIFEST: ${VITE_MANIFEST:-http://localhost:8800/manifest.jsonl}
     ports:
       - "8080:80"
     restart: unless-stopped
     depends_on:
       - backend
+
+  nginx:
+    build: ./music_server/
+    ports:
+      - "8800:80"
+    environment:
+      CORS_ORIGIN: "http://localhost:8080"
+      CACHE_MAX_AGE: "31536000"
+    volumes:
+      - ./music_server/music:/usr/share/nginx/html/music:ro
+    restart: unless-stopped
 
 volumes:
   bookdata:

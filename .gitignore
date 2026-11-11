@@ -5,3 +5,5 @@ env/
 __pycache__/
 book_parser/
 app/NLP/models/
+*/music/
+*/music_server/music/

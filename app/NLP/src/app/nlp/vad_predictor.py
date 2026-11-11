@@ -8,6 +8,13 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
+lexicon = {
+    "joy": [0.96, 0.684, 0.588],
+    "sadness": [-0.896, -0.424, -0.672],
+    "tense": [-0.392, 0.620, 0.058],
+    "calm": [0.75, -0.9, -0.373],
+}
+
 class VADPredictor:
     def __init__(self):
         self.model = None
@@ -27,11 +34,20 @@ class VADPredictor:
         self.model.eval()
         logger.info("Model '%s' loaded on %s", self.model_name, self.device)
 
-    def load_quantization(self, input_path: Path):
-        cfg = json.loads(Path(input_path).read_text(encoding="utf-8"))
-        self.global_quantize_config = cfg["global"]
-        self.per_book_quantize_config = cfg["per_book"]
-        logger.info("Quantization config loaded from %s", input_path.name)
+    def fit_model_space(self, pred, lex_ref, lo=5, hi=95, shrink=1.0):
+        center = np.median(pred, axis=0)
+        s_pred = np.percentile(pred, hi, axis=0) - np.percentile(pred, lo, axis=0)
+        s_lex  = np.percentile(lex_ref, hi, axis=0) - np.percentile(lex_ref, lo, axis=0)
+        k = (s_pred / s_lex) * shrink
+        return center, k
+
+    def fit_centroids(self, cents_lex, center, k):
+        return {name: center + np.asarray(c) * k for name, c in cents_lex.items()}
+
+    def fit_neutral_radius(self, pred, center, pct=25, axis_w=(1, 1, 0)):
+        w = np.asarray(axis_w)
+        r = np.linalg.norm((pred - center) * w, axis=1)
+        return np.percentile(r, pct)
 
     def predict_vad(self, texts: list[str], batch_size: int = 32, max_length: int = 256):
         results = []
@@ -63,34 +79,36 @@ class VADPredictor:
         logger.info("Running inference on %d sentences across %d chapters", len(texts), len(data["chapters"]))
         preds = self.predict_vad(texts)
 
+        logger.info("Calculating new centroids values for emotions range from predictions")
+        lex_ref_array = np.array(list(lexicon.values()))
+        center, k = self.fit_model_space(preds, lex_ref_array)
+        cents = self.fit_centroids(lexicon, center, k)
+
+        logger.info("Calculating neutral circle around the central point")
+        r_neutral = self.fit_neutral_radius(preds, center)
+
         vad = {
             sid: [round(v, 4), round(a, 4), round(d, 4)]
             for sid, (v, a, d) in zip(ids, preds)
         }
 
-        quantize_configs = {"global": self.global_quantize_config}
-        if self.per_book_quantize_config.get("enabled"):
-            v = np.array([p[0] for p in preds])
-            a = np.array([p[1] for p in preds])
-            quantize_configs["per_book"] = {
-                "n_samples": len(v),
-                "v_edges": np.quantile(v, self.per_book_quantize_config["v_quantiles"]).round(4).tolist(),
-                "a_edges": np.quantile(a, self.per_book_quantize_config["a_quantiles"]).round(4).tolist(),
-                "mean": {
-                    "valence": round(float(v.mean()), 4),
-                    "arousal": round(float(a.mean()), 4),
-                },
-                "std": {
-                    "valence": round(float(v.std()), 4),
-                    "arousal": round(float(a.std()), 4),
-                },
-            }
+        safe_centroids = {
+            name: [round(float(val), 4) for val in vec] 
+            for name, vec in cents.items()
+            if name != "neutral"
+        }
+        safe_r_neutral = round(float(r_neutral), 4)
 
         return {
             "meta": {
                 "model_name": self.model_name,
                 "columns": ["valence", "arousal", "dominance"],
-                "quantize_configs": quantize_configs,
+                "config": {
+                    "centroids": safe_centroids,
+                    "r_neutral": safe_r_neutral,
+                    "k": [round(float(x), 4) for x in k],
+                    "center": [round(float(x), 4) for x in center]
+                }
             },
             "vad": vad,
         }

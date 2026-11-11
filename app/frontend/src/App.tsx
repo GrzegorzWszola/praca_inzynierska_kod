@@ -1,14 +1,21 @@
 import './App.css'
 import FileUpload, { formatFileName } from "./components/file_upload"
 import BookReader from "./components/book_reader"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import useJobPolling from './components/use_job_polling';
-import type { Book, BookContent } from './types/Book';
+import type { Book, BookContent, ManifestEntry, Prediction } from './types/Book';
 import { api } from './api';
+import MusicPlayer from './components/music_player';
+
+const MUSIC_BASE = import.meta.env.VITE_MUSIC_ORIGIN ?? "/music";
+const MANIFEST = import.meta.env.VITE_MANIFEST;
 
 function App() {
   const [books, setBooks] = useState<Book[]>([])
   const [openBook, setOpenBook] = useState<{ jobId: string; content: BookContent } | null>(null)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [prediction, setPrediction] = useState<Prediction | null>(null);
+  const [manifest, setManifest] = useState<ManifestEntry[]>([]);
 
   useEffect(() => {
     let cancelled = false
@@ -33,6 +40,23 @@ function App() {
 
     return () => { cancelled = true }
   }, [])
+
+  // Download manifest
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(MANIFEST)
+      .then((r) => {
+        if (!r.ok) throw new Error(`Manifest error ${r.status}`);
+        return r.json();
+      })
+      .then((data: ManifestEntry[]) => {
+        if (!cancelled) setManifest(data);
+      })
+      .catch(console.error);
+
+    return () => { cancelled = true };
+  }, []);
 
   const handleUploaded = ({ jobId, filename }: { jobId: string; filename: string }) =>
     setBooks((prev) => [{ jobId, filename, status: "sent", filepath: "" }, ...prev])
@@ -61,12 +85,32 @@ function App() {
   }
 
   const handleVisibleSentences = useCallback((ids: number[]) => {
-    if (!openBook) return
-    const { jobId } = openBook
-    // ids = current page + 2 pages ahead
-    console.log("[BookReader] jobId:", jobId, "sentence IDs:", ids)
-    // e.g. fetch(`${API}/books/${jobId}/predictions/prefetch`, { method: "POST", body: JSON.stringify({ sentence_ids: ids }) })
-  }, [openBook])
+    if (!openBook) return;
+    const { jobId } = openBook;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await api(`/predictions/${jobId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sentence_ids: ids })
+        });
+
+        if (!res.ok) {
+          if (res.status !== 404) throw new Error(`Error ${res.status}`);
+          return;
+        }
+        setPrediction(await res.json());
+      } catch (error) {
+        console.error("Prefetch error:", error);
+      }
+    }, 2000);
+
+  }, [openBook]);
 
   useJobPolling(books, updateBook)
 
@@ -75,8 +119,19 @@ function App() {
       {openBook && (
         <BookReader
           content={openBook.content}
-          onClose={() => setOpenBook(null)}
+          onClose={() => {
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            setOpenBook(null);
+            setPrediction(null);
+          }}
           onVisibleSentences={handleVisibleSentences}
+        />
+      )}
+      {openBook && (
+        <MusicPlayer 
+          prediction={prediction} 
+          manifest={manifest} 
+          musicBase={MUSIC_BASE}
         />
       )}
 
